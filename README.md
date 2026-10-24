@@ -20,8 +20,8 @@ pruning over HTTP range requests, measured per query:
 
 | | Cold, 3 of 24 partitions | Warm (all ten, one visit) |
 |---|---|---|
-| transfer per question | 1.69 – 2.93 MiB (3.7 – 6.4% of the corpus) | 6.43 MiB for all ten |
-| engine time | 67 – 146 ms over 540,000 rows | 26 – 91 ms per question |
+| transfer per question | 1.69 – 2.93 MiB (3.7 – 6.4% of the corpus) | 6.42 MiB for all ten |
+| engine time | 67 – 146 ms over 540,000 rows | 26 – 91 ms per question (browser HUD) |
 | data requests | 100% `206 Partial Content`, zero full-object `200` | same |
 
 Details and the full table: [`apps/querylens/README.md`](apps/querylens/README.md).

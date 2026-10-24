@@ -74,9 +74,11 @@ Cold session — each question paying its own way — over the default 3-partiti
 issued.** Pruning is real: the worst question read 51.3% of the bytes its own scope
 contains; the cheapest read 29.6%.
 
-Warm session (a visitor running all ten in one page visit, in the browser): **6.43 MiB and
-489 ms of engine time for all ten**, because the footer and column-chunk slices are cached
-per session. The first question pays; the rest are close to free.
+Warm session (a visitor running all ten in one page visit): **6.42 MiB for all ten**, because
+the footer and column-chunk slices are cached per session — the first question pays, the
+rest are close to free. Engine time for the same session: 892 ms in the Node harness,
+489 ms measured by the browser HUD on the same fixture (host-dependent; both are the same
+code path).
 
 All 24 partitions, cold: 29.6%–51.2% of the corpus per question, 480–960 ms engine,
 188.3 MiB total. Selecting scope is a product control, not a detail — it is the dominant
