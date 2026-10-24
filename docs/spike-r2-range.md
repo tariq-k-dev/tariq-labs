@@ -251,6 +251,20 @@ wrong, the system was fine.** Any spike assertion that compares formatted output
 **Nothing here is yet proven at the product's target scale.** 4.32M rows is a fixture. The
 pruning *ratio* is trustworthy; the absolute latency is not.
 
+## Post-spike changes to the fixture (2026-10-24, after the measurements above)
+
+The generator was extended *after* this spike so the ten product questions have real
+answers — the original fixture drew carrier, airport, hour and weekday independently, so
+every question returned "no effect", which is useless as a demo. `build_month` now applies
+carrier skill, origin-hub congestion, a time-of-day accumulation ramp, day-of-week and
+per-day weather shocks, plus distance-based recovery on arrival delay.
+
+Consequences for reading this document: parquet bytes moved by **< 0.5%** (1,997,846 →
+1,993,842 B per month; 45.7 → 45.6 MiB corpus), so the transport findings stand, but any
+absolute byte figure quoted above belongs to the v1 fixture. The product-level numbers
+that supersede them are in `apps/querylens/README.md`, measured through the app's own code
+path (`runQuestion`) rather than the spike harness.
+
 ---
 
 ## Reproduce

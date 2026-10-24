@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Querylens — analytics in the browser, measured</title>
+    <meta
+      name="description"
+      content="Ten questions about US domestic flight performance, answered in the browser by reading byte ranges from Parquet in object storage. Every answer shows its own latency and bytes-read budget."
+    />
+    <link rel="preload" as="image" href="/fallback/carrier-delay.svg" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="padding: 2rem; font-family: system-ui, sans-serif; color: #e4e4e7">
+        <h1>Querylens</h1>
+        <p>
+          This page answers its questions by reading Parquet byte ranges in your browser, so it
+          needs JavaScript. Precomputed results — the same questions, answered at build time — are
+          below.
+        </p>
+        <img src="/fallback/carrier-delay.svg" alt="Mean departure delay by carrier" width="760" />
+        <img src="/fallback/hour-of-day.svg" alt="Mean departure delay by hour of day" width="760" />
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

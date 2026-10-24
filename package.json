@@ -10,10 +10,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @labs/spike-range dev",
+    "dev": "pnpm --filter @labs/querylens dev",
+    "dev:spike": "pnpm --filter @labs/spike-range dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "serve:data": "node spikes/r2-range/server/range-server.mjs",
+    "verify:live": "pnpm --filter @labs/querylens verify:live",
     "spike": "node spikes/r2-range/server/range-server.mjs & pnpm --filter @labs/spike-range dev"
   }
 }

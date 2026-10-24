@@ -7,6 +7,9 @@ dist/
 dist-ssr/
 *.tsbuildinfo
 
+# Measurement output from a local run (the recorded numbers live in README/docs)
+apps/*/out/
+
 # Python
 __pycache__/
 *.py[cod]
