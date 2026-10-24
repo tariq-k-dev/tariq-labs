@@ -1,0 +1,10 @@
+packages:
+  - 'apps/*'
+  - 'spikes/*'
+  - 'packages/*'
+
+# pnpm 12 ignores `pnpm.onlyBuiltDependencies` in package.json — this must live
+# here. esbuild needs its postinstall to place the platform binary; without it
+# vite fails at startup with a confusing "not a valid Win32 application" error.
+allowBuilds:
+  esbuild: true

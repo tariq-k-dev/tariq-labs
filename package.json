@@ -1,0 +1,19 @@
+{
+  "name": "tariq-labs",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Data products built as client-side compute over object storage. Querylens, Tender Radar, Flight Atlas.",
+  "license": "MIT",
+  "author": "Tariq Khan",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @labs/spike-range dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "serve:data": "node spikes/r2-range/server/range-server.mjs",
+    "spike": "node spikes/r2-range/server/range-server.mjs & pnpm --filter @labs/spike-range dev"
+  }
+}

@@ -1,0 +1,19 @@
+[project]
+name = "labs-pipelines"
+version = "0.1.0"
+description = "Ingestion pipelines for tariq-labs: public data -> partitioned Parquet -> R2"
+requires-python = ">=3.11"
+dependencies = [
+    "polars>=1.0",
+    "pyarrow>=16.0",
+    "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
