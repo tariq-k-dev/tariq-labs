@@ -21,9 +21,11 @@ than the naive-CSV approach it was meant to beat. Failing fast was the point.
 
 ## Answer, in one line
 
-**Range requests work. Column pruning works. But not with DuckDB-WASM — its browser build
-buffers entire objects, so it must be replaced by a reader that issues real range requests
-(`hyparquet`).**
+**Range requests work. Column pruning works. DuckDB-WASM cannot be the transport (its browser
+build buffers entire objects) and should not be the query engine either — `hyparquet` plus
+JavaScript aggregation is 5.7× faster and 100× smaller to download.**
+
+→ **Decision: `hyparquet` + JS aggregation. No second engine.**
 
 ---
 
@@ -161,6 +163,77 @@ failures above looked like architectural findings.
 
 ---
 
+## Probe F/G — settling the engine
+
+`hyparquet` is a reader: it returns rows, no SQL. Querylens needs `GROUP BY`. Two options,
+both fetching the **same columns** so the comparison is purely client-side cost:
+
+| Path | What happens |
+|---|---|
+| **(a) F** | hyparquet fetches columns → aggregate in JavaScript |
+| **(b) G** | hyparquet fetches columns → Arrow table → DuckDB-WASM SQL on local memory |
+
+Workload: top carriers by mean departure delay (`GROUP BY carrier`, `avg(dep_delay)`,
+`count(*)`) over 200,000 rows.
+
+### Result — CPU
+
+| | Path (a) JS | Path (b) DuckDB |
+|---|---|---|
+| bytes on the wire | **887.0 KiB (2.76%)** | **887.0 KiB (2.76%)** — identical, as it must be |
+| fetch | 18.3 ms | 18.5 ms |
+| aggregate / convert | **3.4 ms** | arrow 30.3 + ipc 38.2 + sql 36.3 = **104.8 ms** |
+| **total** | **21.7 ms** | **123.3 ms** |
+| one-off engine boot | 0 | 426.4 ms |
+| **cost over (a)** | — | **+101.6 ms, every query** |
+
+**The two engines agree exactly**: 8 carrier groups, max delta `0.0000`. The conversions cost
+(arrow 30.3 + ipc 38.2 = 68.5 ms) is *double* what the SQL buys back (36.3 ms). Copying data
+into a second engine costs more than doing the arithmetic.
+
+### Result — download cost (the decisive number)
+
+| Asset | Transfer |
+|---|---|
+| `duckdb-eh.wasm` (brotli, from jsDelivr, measured via `curl --compressed`) | **6,764,975 B = 6.45 MiB** |
+| `duckdb-browser.js` | 27,407 B (7.00 kB gzip) |
+| `apache-arrow` serialization chunk (IPC only) | 193,680 B (45.55 kB gzip) |
+| **hyparquet JS (index + utils)** | **65,317 B (≈21 kB gzip)** |
+
+The SQL path costs a visitor **6.45 MiB more than the reader path — roughly 100× the bytes** —
+to buy 8 lines of SQL that JavaScript writes in 12 lines anyway. On a 5 Mbps connection that is
+~11 seconds of download for the privilege.
+
+### Decision
+
+**Path (a): `hyparquet` + JavaScript aggregation.** Reasons, in order of weight:
+
+1. 6.45 MiB vs 65 kB is not a trade-off, it is a different product. Querylens' entire premise
+   is "instant, free, client-side"; a 6.45 MiB engine download breaks the premise it exists
+   to demonstrate.
+2. It is **faster** on the measured workload (+101.6 ms for the SQL path), so this is not
+   speed-sacrificed-for-size.
+3. One engine is one thing to explain in an interview.
+
+**Accepted cost:** no SQL. Canned questions become named functions with real aggregation code.
+That is a smaller, more honest product — and for Querylens the "ten canned questions with
+captions" design already implied it. If a future requirement genuinely needs joins or window
+functions, re-open this with a measurement, not an assumption.
+
+**What this forbids advertising:** never describe Querylens as "SQL in the browser" now. It is
+"a query engine in the browser with canned questions". Precision here matters, because the
+previous claim would be a lie a technical interviewer could catch.
+
+### Instrumentation failure #4
+
+The first F/G run reported `results identical: NO`. The engines agreed perfectly. The check
+compared strings — JS `toFixed(2)` against SQL `round(..., 2)` — which disagree at a binary
+float boundary like `1.005` (`"1.00"` vs `1.01`). Comparing `Number` values with a 0.02
+tolerance gave max delta `0.0000`. **Same shape as failures #1 and #2: the assertion was
+wrong, the system was fine.** Any spike assertion that compares formatted output is suspect.
+
+---
+
 ## Gates from this spike
 
 - [x] Cross-origin ranged GET returns `206` + `Content-Range` — verified
@@ -169,7 +242,8 @@ failures above looked like architectural findings.
 - [x] A four-column read over 31 MiB transfers < 5% of the object — **4.44%**
 - [x] No full-body `200` issued for any data read — verified in the request log
 - [x] Engine bytes stay out of other routes — n/a in the spike, gate stands for the product
-- [ ] **Hybrid (b) probe**: hyparquet fetch → DuckDB-WASM SQL on the local table
+- [x] **F/G engine probe**: JS aggregation wins on both CPU and bytes — decided
+- [ ] Ten canned questions implemented as JS aggregations, with a caption on each
 - [ ] Same measurements against the **real R2 bucket**, not the mock
 - [ ] Throttled run (4× CPU / 8 Mbps) — the number that gets published next to the good one
 - [ ] Real BTS corpus at target scale (~40M rows), not 4.3M

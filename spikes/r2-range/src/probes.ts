@@ -24,8 +24,8 @@ export interface ProbeResult {
   rows: Array<[string, string]>
 }
 
-const ms = (n: number) => `${n.toFixed(1)} ms`
-const bytes = (n: number) => {
+export const ms = (n: number) => `${n.toFixed(1)} ms`
+export const bytes = (n: number) => {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`
   return `${(n / 1024 / 1024).toFixed(2)} MiB`

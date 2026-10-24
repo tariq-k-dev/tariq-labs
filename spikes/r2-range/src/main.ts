@@ -8,6 +8,7 @@ import {
   sumBytes,
   type ProbeResult,
 } from './probes'
+import { probeHybrid } from './probe-engine'
 import './style.css'
 
 const report = document.querySelector<HTMLPreElement>('#report')!
@@ -117,6 +118,17 @@ async function run(): Promise<void> {
         `    ${r.label.padEnd(34)} ${String(r.rowsReturned).padStart(8)} ${(r.engineMs.toFixed(1) + ' ms').padStart(10)} ${String(r.serverRequests).padStart(9)} ${String(r.rangeRequests).padStart(10)} ${r.serverBytes.toLocaleString().padStart(11)} ${pct.padStart(9)}`,
       )
     }
+    log('')
+
+    // --- F/G: settle the engine question ----------------------------------
+    log('[F/G] JS aggregate vs fetch-then-DuckDB-SQL')
+    const cmp = await probeHybrid()
+    results.push(cmp.result)
+    for (const [k, v] of cmp.result.rows) log(`    ${k.padEnd(36)} ${v}`)
+    log(`    verdict: ${cmp.result.verdict.toUpperCase()}`)
+    log('')
+    log(`    F  JS aggregate, top 3 by mean dep delay: ${cmp.topA.slice(0, 3).join('  ')}`)
+    log(`    G  DuckDB SQL,   top 3 by mean dep delay: ${cmp.topB.slice(0, 3).join('  ')}`)
     log('')
 
     // --- summary ------------------------------------------------------------

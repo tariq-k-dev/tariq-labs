@@ -36,3 +36,6 @@ wrangler/.wrangler/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local build artefacts from a spike run
+spikes/**/build-report.txt
