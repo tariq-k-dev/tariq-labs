@@ -1,89 +1,89 @@
 {
-  "generatedAt": "2026-10-24T15:51:53.790Z",
+  "generatedAt": "2026-10-24T16:51:10.533Z",
   "note": "Timings are local disk reads at build time (no network). The live page reports transfer bytes from HTTP range responses instead.",
-  "scope": "all 24 partitions · 4,320,000 rows · 45.6 MiB · synthetic fixture",
-  "corpusBytes": 47855402,
-  "corpusRows": 4320000,
+  "scope": "all 12 partitions · 7,044,586 rows · 46.4 MiB · real BTS data",
+  "corpusBytes": 48605619,
+  "corpusRows": 7044586,
   "questions": [
     {
       "id": "carrier-delay",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 806.1,
-      "groups": 8,
-      "headline": "NK averages 20.3 min late; WN averages 13.9 min."
+      "engineMs": 1188.1,
+      "groups": 15,
+      "headline": "PSA Airlines averages 19.0 min late; Endeavor Air averages 3.5 min."
     },
     {
       "id": "airport-delay",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 649.9,
+      "engineMs": 1214,
       "groups": 12,
-      "headline": "EWR has the worst departures at 19.3 min mean delay across 212,608 flights."
+      "headline": "DFW has the worst departures at 17.8 min mean delay across 309,581 flights."
     },
     {
       "id": "hour-of-day",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 628.2,
-      "groups": 18,
-      "headline": "Delay climbs to 23.5 min by 22:00, against 8.9 min at 05:00."
+      "engineMs": 1088.6,
+      "groups": 24,
+      "headline": "Delay climbs from 3.4 min at 06:00 to 21.1 min by 19:00."
     },
     {
       "id": "day-of-week",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 634.2,
+      "engineMs": 955.7,
       "groups": 7,
-      "headline": "Fri is the worst day at 18.5 min mean departure delay."
+      "headline": "Sun is the worst day at 14.9 min mean departure delay."
     },
     {
       "id": "cancellations",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 607.4,
-      "groups": 8,
-      "headline": "NK cancels 26.0 flights per 1,000 — network average 15.2."
+      "engineMs": 921.3,
+      "groups": 15,
+      "headline": "PSA Airlines cancels 41.9 flights per 1,000 — network average 12.8."
     },
     {
       "id": "routes",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 3,
-      "engineMs": 903.3,
+      "engineMs": 1645.3,
       "groups": 10,
-      "headline": "SLC → BOS is the busiest pair with 11,148 flights; the network spans 400 pairs in total."
+      "headline": "LGA → ORD is the busiest pair with 11,316 flights; the network spans 6,910 pairs in total."
     },
     {
       "id": "distance-bands",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 601.4,
+      "engineMs": 891.8,
       "groups": 5,
-      "headline": "1,500+ flights average 12.3 min late on arrival; < 300 mi average 15.9 min."
+      "headline": "1,500+ flights average 3.9 min late on arrival; < 300 mi average 6.9 min."
     },
     {
       "id": "daily",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 3,
-      "engineMs": 748.1,
+      "engineMs": 1218.8,
       "groups": 10,
-      "headline": "Worst day: 2025-06-08 at 53.7 min mean departure delay across 6,463 flights."
+      "headline": "Worst day: 2025-03-16 at 41.4 min mean departure delay across 20,206 flights."
     },
     {
       "id": "carrier-share",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 1,
-      "engineMs": 454.3,
-      "groups": 8,
-      "headline": "AA operates 20.0% of 4,320,000 flights."
+      "engineMs": 731.1,
+      "groups": 15,
+      "headline": "Southwest Airlines operates 19.7% of 7,044,586 flights."
     },
     {
       "id": "extreme-delays",
-      "rows": 4320000,
+      "rows": 7044586,
       "columns": 2,
-      "engineMs": 598.5,
-      "groups": 8,
-      "headline": "NK puts 6.2% of flights more than an hour late."
+      "engineMs": 959,
+      "groups": 15,
+      "headline": "PSA Airlines puts 11.0% of flights more than an hour late."
     }
   ]
 }

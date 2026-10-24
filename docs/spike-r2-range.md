@@ -119,12 +119,20 @@ Every data request was a `206` on a byte range — e.g. `bytes=32346604-32870891
 
 ## Three design consequences
 
-**1. The footer is the dominant fixed cost.** It is 512 KiB per file and accounts for **85%**
-of a single-column query (524 of 618 KiB). This changes the partitioning calculus: fewer,
-smaller files mean smaller footers, so monthly partitions reduce the per-query fixed cost
-substantially. It also means the first query on any partition is footer-bound and later
-queries on the same partition are nearly free if the footer is cached.
-→ Action: cache the parsed footer per partition for the session; do not re-fetch it per query.
+**1. The footer looked like the dominant fixed cost — and the 512 KiB was our own bug.**
+This section originally read "it is 512 KiB per file and accounts for 85% of a single-column
+query". That was wrong, and it sent the product down a wrong path for two sessions.
+
+**Corrected 2026-10-24 against the real corpus:** hyparquet's `parquetMetadataAsync` has an
+`initialFetchSize` default of 512 KiB — the window it grabs because it cannot know the footer
+length until it has read the trailer. The footer itself is **5,649 bytes** on these files.
+Reading the 8-byte trailer first and then exactly the footer cut the ten-question cold total
+from 38.1 MiB to 23.3 MiB, and one two-column question from 43.0% of its partition to 30.4%.
+
+The cache action was right for the wrong reason: cache the parsed footer per partition, yes —
+but also stop over-fetching it. Note the claim "smaller files mean smaller footers" is only
+approximately true: the footer scales with column count × row-group count, not with rows, so
+partitioning by time barely changes it while changing the number of files you pay it on.
 
 **2. hyparquet has no SQL.** It is a reader: it returns rows, not aggregates. `DuckDB-WASM`
 did `GROUP BY` happily (8 carrier groups, grouped averages) against buffered memory.
@@ -243,13 +251,19 @@ wrong, the system was fine.** Any spike assertion that compares formatted output
 - [x] No full-body `200` issued for any data read — verified in the request log
 - [x] Engine bytes stay out of other routes — n/a in the spike, gate stands for the product
 - [x] **F/G engine probe**: JS aggregation wins on both CPU and bytes — decided
-- [ ] Ten canned questions implemented as JS aggregations, with a caption on each
+- [x] Ten canned questions implemented as JS aggregations, with a caption on each — in
+      `apps/querylens`, measured cold and warm
 - [ ] Same measurements against the **real R2 bucket**, not the mock
-- [ ] Throttled run (4× CPU / 8 Mbps) — the number that gets published next to the good one
-- [ ] Real BTS corpus at target scale (~40M rows), not 4.3M
+- [ ] Throttled run (4x CPU / 8 Mbps) — the number that gets published next to the good one
+- [x] Real BTS corpus at product scale — 12 real months, **7,044,586 rows / 46.4 MiB**
+      (a 5-year window would be ~36 M rows / ~228 MiB; 12 months was chosen to keep the
+      ingest loop under four minutes while the architecture is still being built)
 
-**Nothing here is yet proven at the product's target scale.** 4.32M rows is a fixture. The
-pruning *ratio* is trustworthy; the absolute latency is not.
+**Superseded by real data (2026-10-24).** Every absolute figure above was measured on a
+synthetic 4.32M-row fixture. The real corpus reproduces the transport findings — 100%
+`206` responses, zero full-body `200`s — but not the ratios, because the real projection is
+4.1 MiB per month rather than 1.9 MiB and because the footer bug described in §"Three design
+consequences" inflated every narrow query. Current numbers: `apps/querylens/README.md`.
 
 ## Post-spike changes to the fixture (2026-10-24, after the measurements above)
 
@@ -261,9 +275,12 @@ per-day weather shocks, plus distance-based recovery on arrival delay.
 
 Consequences for reading this document: parquet bytes moved by **< 0.5%** (1,997,846 →
 1,993,842 B per month; 45.7 → 45.6 MiB corpus), so the transport findings stand, but any
-absolute byte figure quoted above belongs to the v1 fixture. The product-level numbers
-that supersede them are in `apps/querylens/README.md`, measured through the app's own code
-path (`runQuestion`) rather than the spike harness.
+absolute byte figure quoted above belongs to the v1 fixture.
+
+The fixture has since been replaced entirely: `pipelines/bts/fetch.py` ingests the real BTS
+zips, and the synthetic generator is kept only for tests that must not touch the network.
+Product-level numbers, measured through the app's own code path (`runQuestion`) rather than
+this spike harness, are in `apps/querylens/README.md`.
 
 ---
 

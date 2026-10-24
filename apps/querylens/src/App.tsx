@@ -51,7 +51,7 @@ export default function App() {
         </p>
         <p className="lede lede--small">
           Watch the <strong>transfer</strong> line under each answer. A two-column question over
-          three months reads about 5% of this corpus; a one-column question reads less, and fewer
+          three months reads 5–8% of this corpus; the one-column question reads 0.02%, and fewer
           partitions read fewer bytes still. That is Parquet column pruning and partitioning,
           measured per query rather than claimed on a slide.
         </p>
@@ -68,7 +68,9 @@ export default function App() {
               </span>
               {lens.manifest.dataset.synthetic ? (
                 <span className="pill pill--warn">synthetic fixture — not real flight records</span>
-              ) : null}
+              ) : (
+                <span className="pill pill--strong">real BTS On-Time Performance</span>
+              )}
             </>
           ) : lens.manifestError ? (
             <span className="pill pill--warn">dataset unreachable: {lens.manifestError}</span>
@@ -220,8 +222,18 @@ export default function App() {
                   return (
                     <tr key={q.id} onClick={() => lens.select(q.id)} className="log__row">
                       <td>{q.title}</td>
-                      <td className="right">{fmtBytes(metrics.bytesFetched)}</td>
-                      <td className="right">{fmt1(pct)}%</td>
+                      <td className="right">
+                        {metrics.bytesFetched === 0 && metrics.bytesFromCache > 0 ? (
+                          <span title={`${fmtBytes(metrics.bytesFromCache)} served from the session slice cache`}>
+                            0 B <span className="muted">cached</span>
+                          </span>
+                        ) : (
+                          fmtBytes(metrics.bytesFetched)
+                        )}
+                      </td>
+                      <td className="right">
+                        {metrics.bytesFetched === 0 ? <span className="muted">—</span> : `${fmt1(pct)}%`}
+                      </td>
                       <td className="right">{fmtMs(metrics.engineMs)}</td>
                       <td className="right">{record.renderMs == null ? '—' : fmtMs(record.renderMs)}</td>
                       <td className="right">{fmtInt(metrics.rowsRead)}</td>
@@ -256,14 +268,26 @@ export default function App() {
             by two orders of magnitude in the spike.
           </li>
           <li>
-            <strong>The data.</strong> The current corpus is a synthetic fixture shaped like the
-            BTS On-Time Performance schema, published so the architecture can be measured without
-            shipping a 400 MB download. Numbers on this page are real measurements of this fixture.
+            <strong>The fix that mattered most.</strong> The reader's stock footer path fetches the
+            last 512 KiB to locate a footer that is 5.6 kB on these files. Reading the 8-byte
+            trailer first and then the exact footer cut a two-column question from 41.6% of its
+            scope to 30.4%, and the ten-question total from 38.1 MiB to 23.3 MiB. It was invisible
+            while the numbers looked like column pruning, which is why
+            <code>scripts/explain-range.ts</code> exists.
           </li>
           <li>
-            <strong>Published bad number.</strong> Under 4× CPU throttling and an 8 Mbps profile the
-            same queries degrade by roughly 7×. Volunteering the slow number is more useful than
-            hiding it.
+            <strong>The data.</strong> Real BTS Reporting Carrier On-Time Performance, one
+            partition per month, projected from 110 columns to the 13 these questions need. The
+            ingest script downloads the public zips and writes the Parquet; nothing is transformed
+            at request time. Numbers on this page are real measurements of real records.
+          </li>
+          <li>
+            <strong>What is not measured yet.</strong> The throttled profile — 4× CPU with an
+            8 Mbps link — has not been run against this corpus. A ~7× figure circulates from
+            third-party measurements of a different build, and quoting it here would be inventing a
+            number. The throttled row is an open gate, not a claim. Cold-versus-warm is measured:
+            the same ten questions cost 23.3 MiB cold and 12.4 MiB warm, because footer and
+            column-chunk slices are cached for the session.
           </li>
         </ul>
       </footer>

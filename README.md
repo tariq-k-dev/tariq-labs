@@ -9,7 +9,7 @@ deliverables.
 
 | App | What it is | URL | Status |
 |---|---|---|---|
-| `apps/querylens` | Ten questions over partitioned Parquet, answered in the browser with a per-query latency and bytes-read budget | querylens.tariqkhan.dev | **runs locally against the mock store**; not yet on R2 |
+| `apps/querylens` | Ten questions over partitioned Parquet, answered in the browser with a per-query latency and bytes-read budget | querylens.tariqkhan.dev | **runs locally against the mock store, on real BTS data**; not yet on R2 |
 | `apps/tender-radar` | Grounded RAG over public tenders, with a published eval scorecard | tender-radar.tariqkhan.dev | not started |
 | `apps/flight-atlas` | GPU-instanced 3D explorer over the same Parquet substrate | flight-atlas.tariqkhan.dev | not started |
 
@@ -18,13 +18,16 @@ reader and ten named aggregations; the SQL route was measured and rejected (prob
 [`docs/spike-r2-range.md`](docs/spike-r2-range.md)). What it does demonstrate is column
 pruning over HTTP range requests, measured per query:
 
-| | Cold, 3 of 24 partitions | Warm (all ten, one visit) |
+| | Cold, 3 of 12 partitions | Warm (all ten, one visit) |
 |---|---|---|
-| transfer per question | 1.69 – 2.93 MiB (3.7 – 6.4% of the corpus) | 6.42 MiB for all ten |
-| engine time | 67 – 146 ms over 540,000 rows | 26 – 91 ms per question (browser HUD) |
+| corpus | 7,044,586 real BTS rows · 46.4 MiB | same |
+| transfer per question | 18 KiB – 3.86 MiB (0.04 – 8.3% of the corpus) | 10.1 – 12.4 MiB for all ten |
+| engine time | 210 – 447 ms over 1,845,381 rows | 113 – 340 ms per question |
 | data requests | 100% `206 Partial Content`, zero full-object `200` | same |
 
-Details and the full table: [`apps/querylens/README.md`](apps/querylens/README.md).
+Measured after fixing the reader's footer path (it was fetching 512 KiB to find a 5.6 kB
+footer): the ten questions went from 38.1 MiB to 23.3 MiB cold. Details, the per-question
+table and the gate checklist: [`apps/querylens/README.md`](apps/querylens/README.md).
 
 ## Why this architecture
 
@@ -40,11 +43,28 @@ defensible in an interview only because it was measured, not asserted.
 
 ```
 apps/           three Cloudflare Pages projects, one per product
-packages/       data-core (Parquet schema, reader helpers), eval (golden set, scorer)
+packages/       data-core (range reader, aggregations, chart geometry), eval (golden set, scorer)
 pipelines/      ingestion: public data -> partitioned Parquet -> R2 (Python, UV, Polars)
 spikes/         throwaway experiments that answer one risky question before building
 docs/           spike records and design notes
 ```
+
+## Data: real, not a fixture
+
+`pipelines/bts/fetch.py` downloads the public BTS Reporting Carrier On-Time Performance
+zips and writes partitioned SNAPPY Parquet. The source is a plain static URL — no session,
+no form POST, no API key:
+
+```
+https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_YYYY_M.zip
+```
+
+One archive is ~28 MB zipped / 273 MB of CSV / 602,378 rows; the projection to 13 columns is
+~4.1 MiB of Parquet. The current corpus is 12 months (Sep 2024 – Aug 2025).
+
+`generate_sample.py` still exists as a synthetic generator for tests that must not touch
+the network, and its output is marked `"synthetic": true` in the manifest so the UI labels
+it. The app reads that flag; it does not assume.
 
 ## The measurement that changed the design
 
@@ -64,10 +84,11 @@ R2-compatible storage. Full record: [`docs/spike-r2-range.md`](docs/spike-r2-ran
 ```bash
 pnpm install
 cd pipelines && uv sync
-uv run python bts/generate_sample.py     # synthetic, BTS-shaped; not real flight data
+uv run python bts/fetch.py --months 2024-09 2025-08    # real data, ~28 MB per month
+cd ..
 
 # terminal 1: the object store (mock R2 with a request log)
-cd .. && node spikes/r2-range/server/range-server.mjs --port 8788
+node spikes/r2-range/server/range-server.mjs --port 8788
 
 # terminal 2: the app
 cd apps/querylens && pnpm dev            # http://127.0.0.1:5273
@@ -78,14 +99,9 @@ To reproduce the numbers above, with the mock store running:
 ```bash
 cd apps/querylens
 pnpm verify:live --cold          # per-question cost over the default 3-partition scope
-pnpm verify:live --cold --all    # same over all 24 partitions
+pnpm verify:live --cold --all    # same over all 12 partitions
 pnpm precompute                  # rebuild the static posters in public/fallback
 ```
-
-All data fixtures are **synthetic** — generated deterministically, shaped like the real
-public datasets, including the delay effects (carrier, hub congestion, time of day,
-weekday, weather shocks) that make the questions answerable. They are marked
-`"synthetic": true` in each manifest and are never presented as real data.
 
 ## License
 

@@ -44,6 +44,37 @@ function flag(value: unknown): boolean {
   return n != null && n > 0
 }
 
+/**
+ * Reporting carrier code -> name, for the 15 codes present in the BTS corpus.
+ *
+ * The real data reports regional partners under their own two-letter code (`OH`,
+ * `9E`, `MQ`), which means nothing to a visitor reading a headline. Names come from
+ * the BTS carrier lookup; unknown codes fall through to the raw code rather than
+ * being hidden, so a new entrant shows up as itself instead of as "Unknown".
+ */
+const CARRIER_NAMES: Record<string, string> = {
+  AA: 'American Airlines',
+  AS: 'Alaska Airlines',
+  B6: 'JetBlue',
+  DL: 'Delta Air Lines',
+  F9: 'Frontier Airlines',
+  G4: 'Allegiant Air',
+  HA: 'Hawaiian Airlines',
+  MQ: 'Envoy Air',
+  NK: 'Spirit Airlines',
+  OH: 'PSA Airlines',
+  OO: 'SkyWest Airlines',
+  UA: 'United Airlines',
+  WN: 'Southwest Airlines',
+  YX: 'Republic Airways',
+  '9E': 'Endeavor Air',
+}
+
+/** Carrier code -> display name, falling back to the code itself. */
+function carrierName(code: string): string {
+  return CARRIER_NAMES[code] ?? code
+}
+
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /** `fl_date` decodes to a Date (Parquet timestamp). Normalise to a day number. */
@@ -154,7 +185,7 @@ const carrierDelay: QuestionRunner<Map<string, Acc>> = {
     }
   },
   finish(state) {
-    const groups = sortGroups(state, 'desc')
+    const groups = sortGroups(state, 'desc').map((row) => ({ ...row, key: carrierName(row.key) }))
     const table = tableFrom(
       DELAY_COLUMNS.map((c) => (c.key === 'group' ? { ...c, label: 'Carrier' } : c)),
       delayRows(groups),
@@ -173,35 +204,59 @@ const carrierDelay: QuestionRunner<Map<string, Acc>> = {
 }
 
 // -------------------------------------------------------------- 2. airport
-const airportDelay: QuestionRunner<Map<string, Acc>> = {
+/**
+ * Airports below a minimum sample size are excluded from the ranking.
+ *
+ * Real BTS data made this necessary. Without a floor, the "worst airport" was DHN with
+ * 52 flights and a 99-minute mean — one weather event, not an operational fact — and
+ * even a fixed 1,000-flight floor let MGM in at n=1,114. The floor is a share of the
+ * rows actually read, so it stays meaningful whether the visitor selects one month or
+ * five years, and it is printed in the note so the exclusion is never hidden.
+ */
+const AIRPORT_MIN_SHARE = 0.002
+const AIRPORT_MIN_ABSOLUTE = 1_000
+
+interface AirportState {
+  byAirport: Map<string, Acc>
+  total: number
+}
+
+const airportDelay: QuestionRunner<AirportState> = {
   meta: questionById('airport-delay'),
-  create: () => new Map<string, Acc>(),
+  create: () => ({ byAirport: new Map<string, Acc>(), total: 0 }),
   accumulate(state, rows) {
     for (const row of rows) {
       const origin = text(row[0])
       if (!origin) continue
-      let acc = state.get(origin)
+      state.total += 1
+      let acc = state.byAirport.get(origin)
       if (!acc) {
         acc = blank()
-        state.set(origin, acc)
+        state.byAirport.set(origin, acc)
       }
       accum(acc, num(row[1]))
     }
   },
   finish(state) {
-    const groups = sortGroups(state, 'desc').slice(0, 12)
+    const floor = Math.max(AIRPORT_MIN_ABSOLUTE, Math.round(state.total * AIRPORT_MIN_SHARE))
+    const eligible = [...state.byAirport.entries()].filter(([, acc]) => acc.n >= floor)
+    const ranked = eligible
+      .sort((a, b) => mean(b[1]) - mean(a[1]))
+      .slice(0, 12)
+      .map(([key, acc]) => ({ key, acc }))
     const table = tableFrom(
       DELAY_COLUMNS.map((c) => (c.key === 'group' ? { ...c, label: 'Origin' } : c)),
-      delayRows(groups),
+      delayRows(ranked),
     )
-    const worst = groups[0]
+    const worst = ranked[0]
+    const excluded = state.byAirport.size - eligible.length
     return {
       table,
-      chart: delayChart(this.meta, groups),
+      chart: delayChart(this.meta, ranked),
       headline: worst
         ? `${worst.key} has the worst departures at ${fmt1(mean(worst.acc))} min mean delay across ${fmtInt(worst.acc.n)} flights.`
-        : 'No rows matched.',
-      note: `Top 12 of ${fmtInt(state.size)} airports shown, ranked by mean departure delay.`,
+        : `No airport reached ${fmtInt(floor)} departures in this range.`,
+      note: `Airports with fewer than ${fmtInt(floor)} departures are excluded (${excluded} of ${fmtInt(state.byAirport.size)}) — a low-volume airport with one storm day is noise, not a ranking. Top 12 shown.`,
     }
   },
 }
@@ -230,7 +285,13 @@ const hourOfDay: QuestionRunner<Map<number, Acc>> = {
       rows.map(({ key, acc }) => [`${String(key).padStart(2, '0')}:00`, acc.n, mean(acc), pct(acc.late, acc.n)] as Cell[]),
     )
     const peak = rows.reduce((best, r) => (mean(r.acc) > mean(best.acc) ? r : best), rows[0])
-    const first = rows[0]
+    // Compare the peak against the EARLY MORNING, not against the first row: real BTS
+    // data starts at 00:00 with a handful of heavily delayed red-eyes, which is not a
+    // baseline for "the day degrades". Hours 05:00–08:00 are where a schedule is honest.
+    const morning = rows.filter((r) => r.key >= 5 && r.key <= 8 && r.acc.n > 0)
+    const baseline = morning.length
+      ? morning.reduce((best, r) => (mean(r.acc) < mean(best.acc) ? r : best))
+      : rows[0]
     return {
       table,
       chart: {
@@ -242,9 +303,9 @@ const hourOfDay: QuestionRunner<Map<number, Acc>> = {
         highlight: rows.indexOf(peak),
       },
       headline: peak
-        ? `Delay climbs to ${fmt1(mean(peak.acc))} min by ${String(peak.key).padStart(2, '0')}:00, against ${fmt1(mean(first.acc))} min at ${String(first.key).padStart(2, '0')}:00.`
+        ? `Delay climbs from ${fmt1(mean(baseline.acc))} min at ${String(baseline.key).padStart(2, '0')}:00 to ${fmt1(mean(peak.acc))} min by ${String(peak.key).padStart(2, '0')}:00.`
         : 'No rows matched.',
-      note: 'Scheduled local departure hour. Hours with no scheduled flights are omitted.',
+      note: 'Scheduled local departure hour. Hours with no scheduled flights are omitted; the morning baseline is the least-delayed hour between 05:00 and 08:00.',
     }
   },
 }
@@ -323,7 +384,7 @@ const cancellations: QuestionRunner<Map<string, CancelAcc>> = {
         { key: 'cancelled', label: 'Cancelled', format: 'int', align: 'right' },
         { key: 'rate', label: 'Per 1,000', format: 'per1k', align: 'right' },
       ],
-      rows.map(({ key, acc, rate }) => [key, acc.n, acc.cancelled, rate] as Cell[]),
+      rows.map(({ key, acc, rate }) => [carrierName(key), acc.n, acc.cancelled, rate] as Cell[]),
     )
     const worst = rows[0]
     const network = rows.reduce(
@@ -335,12 +396,12 @@ const cancellations: QuestionRunner<Map<string, CancelAcc>> = {
       chart: {
         kind: 'bar',
         label: this.meta.valueLabel,
-        categories: rows.map((r) => r.key),
+        categories: rows.map((r) => carrierName(r.key)),
         values: rows.map((r) => r.rate),
         highlight: 0,
       },
       headline: worst
-        ? `${worst.key} cancels ${fmt1(worst.rate)} flights per 1,000 — network average ${fmt1((network.cancelled / Math.max(1, network.n)) * 1000)}.`
+        ? `${carrierName(worst.key)} cancels ${fmt1(worst.rate)} flights per 1,000 — network average ${fmt1((network.cancelled / Math.max(1, network.n)) * 1000)}.`
         : 'No rows matched.',
       note: 'Cancellation rate per 1,000 scheduled flights.',
     }
@@ -538,7 +599,7 @@ const carrierShare: QuestionRunner<Map<string, number>> = {
         { key: 'flights', label: 'Flights', format: 'int', align: 'right' },
         { key: 'share', label: 'Share', format: 'pct1', align: 'right' },
       ],
-      rows.map(([key, n]) => [key, n, pct(n, total)] as Cell[]),
+      rows.map(([key, n]) => [carrierName(key), n, pct(n, total)] as Cell[]),
     )
     const top = rows[0]
     return {
@@ -546,12 +607,12 @@ const carrierShare: QuestionRunner<Map<string, number>> = {
       chart: {
         kind: 'bar',
         label: this.meta.valueLabel,
-        categories: rows.map(([k]) => k),
+        categories: rows.map(([k]) => carrierName(k)),
         values: rows.map(([, n]) => n),
         highlight: 0,
       },
       headline: top
-        ? `${top[0]} operates ${fmt1(pct(top[1], total))}% of ${fmtInt(total)} flights.`
+        ? `${carrierName(top[0])} operates ${fmt1(pct(top[1], total))}% of ${fmtInt(total)} flights.`
         : 'No rows matched.',
       note: 'Reads a single column (carrier), which is why it is the cheapest query on the page.',
     }
@@ -608,7 +669,7 @@ const extremeDelays: QuestionRunner<Map<string, TailAcc>> = {
         },
       ],
       rows.map(({ key, acc }) => [
-        key,
+        carrierName(key),
         acc.n,
         pct(acc.over60, acc.n),
         pct(acc.over120, acc.n),
@@ -621,12 +682,12 @@ const extremeDelays: QuestionRunner<Map<string, TailAcc>> = {
       chart: {
         kind: 'bar',
         label: this.meta.valueLabel,
-        categories: rows.map((r) => r.key),
+        categories: rows.map((r) => carrierName(r.key)),
         values: rows.map((r) => r.over60),
         highlight: 0,
       },
       headline: worst
-        ? `${worst.key} puts ${fmt1(worst.over60)}% of flights more than an hour late.`
+        ? `${carrierName(worst.key)} puts ${fmt1(worst.over60)}% of flights more than an hour late.`
         : 'No rows matched.',
       note: `"Late" means more than ${LATE_MIN} minutes. Delays are departure delay; cancelled flights are excluded.`,
     }

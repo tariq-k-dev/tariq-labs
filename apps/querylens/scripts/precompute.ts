@@ -177,7 +177,7 @@ async function main(): Promise<void> {
   const manifest = parseManifest(JSON.parse(await readFile(join(DATA_ROOT, 'manifest.json'), 'utf8')))
   await mkdir(OUT_DIR, { recursive: true })
 
-  const scope = `all ${manifest.partitions.length} partitions · ${manifest.totals.rows.toLocaleString('en-US')} rows · ${fmtBytes(manifest.totals.bytes)} · synthetic fixture`
+  const scope = `all ${manifest.partitions.length} partitions · ${manifest.totals.rows.toLocaleString('en-US')} rows · ${fmtBytes(manifest.totals.bytes)} · real BTS data`
   const metrics: PosterMetric[] = []
 
   for (const meta of QUESTIONS) {

@@ -14,7 +14,7 @@
  * and counted the wasm bundle two orders of magnitude wrong in the spike.
  */
 
-import { parquetMetadataAsync, type AsyncBuffer, type FileMetaData } from 'hyparquet'
+import { parquetMetadata, type AsyncBuffer, type FileMetaData } from 'hyparquet'
 
 export interface SourceStats {
   /** HEAD requests (size discovery). Carries no body. */
@@ -188,13 +188,41 @@ export class RangeSource {
   }
 
   /**
-   * Parsed footer. Cached per object for the session — the spike measured the
-   * footer at 512 KiB, which was 85% of a one-column query, so re-fetching it
-   * per question would dominate everything.
+   * Parsed footer. Cached per object for the session.
+   *
+   * Do NOT call `parquetMetadataAsync(file)` with defaults: its `initialFetchSize` is
+   * 512 KiB, because it cannot know the footer length until it has read the trailer.
+   * On the real BTS partitions the footer is ~5.6 kB, so the default fetched 512 KiB to
+   * find it — 12.9% of a 4.1 MB object, and 92x more than needed. That single line was
+   * the largest transfer cost in the product, and it hid behind "2 of 13 columns" because
+   * the extra bytes looked like column data.
+   *
+   * The fix reads the 8-byte trailer first (footer length lives there), then fetches
+   * exactly the footer. Two small requests instead of one 512 KiB request.
    */
   metadata(): Promise<FileMetaData> {
-    this.metaPromise ??= this.file().then((file) => parquetMetadataAsync(file))
+    this.metaPromise ??= this.readFooter().then((buffer) => parquetMetadata(buffer))
     return this.metaPromise
+  }
+
+  /** Exact footer bytes: trailer first, then the metadata the trailer describes. */
+  private async readFooter(): Promise<ArrayBuffer> {
+    const size = this.totalSize || (await this.size())
+    if (size < 12) throw new Error(`not a parquet object: ${this.url} (${size} B)`)
+
+    const trailer = await this.slice(size - 8, size)
+    const view = new DataView(trailer)
+    if (view.getUint32(trailer.byteLength - 4, true) !== 0x31524150) {
+      throw new Error(`parquet footer magic missing: ${this.url}`)
+    }
+    const metadataLength = view.getUint32(0, true)
+    const footerStart = size - metadataLength - 8
+    if (metadataLength <= 0 || footerStart < 0) {
+      throw new Error(
+        `implausible parquet footer length ${metadataLength} for ${size} B: ${this.url}`,
+      )
+    }
+    return this.slice(footerStart, size)
   }
 
   /** Row count straight from the footer, no data pages read. */
