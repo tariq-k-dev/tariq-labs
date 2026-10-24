@@ -223,9 +223,11 @@ def main() -> None:
     ap.add_argument(
         "--row-group-size",
         type=int,
-        default=200_000,
-        help="rows per Parquet row group. Larger = fewer range requests per query; "
-        "we never filter, so there is no pruning to lose. Default 200_000.",
+        default=700_000,
+        help="rows per Parquet row group. Measured: 700_000 puts one row group in a monthly "
+        "file, which halves the range requests per query (9-15 vs 18-40) and halves the "
+        "footer (2.5 kB vs 5.6 kB), for 6% more bytes. We never row-filter, so there is no "
+        "pruning to lose by making row groups large. Default 700_000.",
     )
     ap.add_argument("--keep-csv", action="store_true", help="no-op; the zip is always kept for re-runs")
     ap.add_argument("--min-rows", type=int, default=300_000, help="reject a month below this row count")

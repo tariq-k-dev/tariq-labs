@@ -232,7 +232,11 @@ export default function App() {
                         )}
                       </td>
                       <td className="right">
-                        {metrics.bytesFetched === 0 ? <span className="muted">—</span> : `${fmt1(pct)}%`}
+                        {metrics.bytesFetched === 0 ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          `${pct < 0.01 ? pct.toFixed(4) : pct < 0.1 ? pct.toFixed(3) : pct < 1 ? pct.toFixed(2) : fmt1(pct)}%`
+                        )}
                       </td>
                       <td className="right">{fmtMs(metrics.engineMs)}</td>
                       <td className="right">{record.renderMs == null ? '—' : fmtMs(record.renderMs)}</td>

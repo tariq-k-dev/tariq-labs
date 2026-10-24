@@ -21,13 +21,15 @@ pruning over HTTP range requests, measured per query:
 | | Cold, 3 of 12 partitions | Warm (all ten, one visit) |
 |---|---|---|
 | corpus | 7,044,586 real BTS rows · 46.4 MiB | same |
-| transfer per question | 18 KiB – 3.86 MiB (0.04 – 8.3% of the corpus) | 10.1 – 12.4 MiB for all ten |
-| engine time | 210 – 447 ms over 1,845,381 rows | 113 – 340 ms per question |
+| transfer per question | 8.3 KiB – 4.32 MiB (0.02 – 8.9% of the corpus) | 10.1 – 12.4 MiB for all ten |
+| engine time | 188 – 519 ms over 1,845,381 rows | 113 – 340 ms per question |
 | data requests | 100% `206 Partial Content`, zero full-object `200` | same |
 
-Measured after fixing the reader's footer path (it was fetching 512 KiB to find a 5.6 kB
-footer): the ten questions went from 38.1 MiB to 23.3 MiB cold. Details, the per-question
-table and the gate checklist: [`apps/querylens/README.md`](apps/querylens/README.md).
+Measured after two fixes that each cut cost without changing the architecture: the reader
+stopped fetching 512 KiB to find a 5.6 kB footer (38.1 → 23.3 MiB cold), and partitions moved
+to one row group per file, which halves the request count for 6% more bytes. Details, the
+per-question table and the gate checklist:
+[`apps/querylens/README.md`](apps/querylens/README.md).
 
 ## Why this architecture
 

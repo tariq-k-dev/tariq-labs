@@ -1,6 +1,21 @@
 import { fmt1, fmtBytes, fmtInt, fmtMs } from '@labs/data-core'
 import type { RunMetrics } from '../lib/protocol'
 
+/**
+ * Share of the corpus, at enough precision to stay honest.
+ *
+ * `fmt1` renders a real 0.017% as "0.0%", which reads as "this read nothing". Anything
+ * under 1% gets significant digits instead, so a 2,822-byte query says 0.006% rather than
+ * claiming zero.
+ */
+function formatShare(pct: number): string {
+  if (!Number.isFinite(pct) || pct <= 0) return '0'
+  if (pct < 0.01) return pct.toFixed(4)
+  if (pct < 0.1) return pct.toFixed(3)
+  if (pct < 1) return pct.toFixed(2)
+  return fmt1(pct)
+}
+
 export function Hud({ metrics, renderMs }: { metrics: RunMetrics; renderMs?: number }) {
   const corpusPct =
     metrics.corpusBytes > 0 ? (metrics.bytesFetched / metrics.corpusBytes) * 100 : 0
@@ -13,8 +28,7 @@ export function Hud({ metrics, renderMs }: { metrics: RunMetrics; renderMs?: num
           <span className="hud__label">transfer</span>
           <span className="hud__value">{fmtBytes(metrics.bytesFetched)}</span>
           <span className="hud__hint">
-            {corpusPct < 0.01 ? corpusPct.toFixed(4) : fmt1(corpusPct)}% of{' '}
-            {fmtBytes(metrics.corpusBytes)} corpus
+            {formatShare(corpusPct)}% of {fmtBytes(metrics.corpusBytes)} corpus
           </span>
         </div>
         <div className="hud__cell">
