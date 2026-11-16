@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.29.0",
-    "apache-arrow": "^17.0.0",
+    "apache-arrow": "^21.2.0",
     "hyparquet": "^1.31.5"
   },
   "devDependencies": {
